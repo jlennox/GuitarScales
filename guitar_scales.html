@@ -1,0 +1,351 @@
+<html>
+<head>
+    <style text="text/css">
+        * { box-sizing: border-box; }
+        .tone, .mark {
+            width: 40px;
+            border-top: 1px solid #888;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .tone.first {
+            border-right: 4px solid #888;
+            border-left: 1px solid #888;
+        }
+
+        .tone {
+            height: 40px;
+            border-right: 1px solid #888;
+            line-height: 40px;
+            vertical-align: middle;
+        }
+
+        .mark {
+            font-size: 20px;
+        }
+
+        .board {
+            margin-top: 0px;
+            margin-left: 40px;
+            display: inline-block;
+        }
+
+        .show-color {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            border: 1px solid black;
+        }
+
+        .options, .board {
+            float: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="options">
+        <select class="scaleSelection" autocomplete="off">
+            <option value="major" selected>Diatonic, Major</option>
+            <option value="minor">Diatonic, Minor (natural)</option>
+            <option value="minorMelodic">Diatonic, Minor (melodic)</option>
+            <option value="minorHarmonic">Diatonic, Minor (harmonic)</option>
+            <option value="major5">Pentatonic, Major</option>
+            <option value="minor5">Pentatonic, Minor</option>
+            <option value="minorBlues">Blues, Major</option>
+            <option value="majorBlues">Blues, Minor</option>
+        </select>
+        <select class="scaleMode" autocomplete="off">
+            <option value="0">+0: Ionian</option>
+            <option value="1">+1: Dorian</option>
+            <option value="2">+2: Phrygian</option>
+            <option value="3">+3: Lydian</option>
+            <option value="4">+4: Mixolydian</option>
+            <option value="5">+5: Aeolian</option>
+            <option value="6">+6: Locrian</option>
+        </select>
+        <div class="nths"></div>
+    </div>
+
+    <script type="text/javascript">
+        const strings = [ "E", "A", "D", "G", "B", "E" ].reverse();
+        const tones = [
+            "A", "A#", "B", "C", "C#", "D", "D#",
+            "E", "F", "F#", "G", "G#" ];
+        const flatTones = {
+            "G♭": "F#",
+            "A♭": "G#",
+            "B♭": "A#",
+            "D♭": "C#",
+            "E♭": "D#",
+            "F♭": "E",
+            "C♭": "B"
+        };
+        const scales = {
+            major:         scaleFromBase(["A", "B", "C#", "D", "E", "F#", "G#"]),
+            minor:         scaleFromBase(["A", "B", "C", "D", "E", "F", "G"]),
+            minorMelodic:  scaleFromBase(["A", "B", "C", "D", "E", "F#", "G#"]),
+            minorHarmonic: scaleFromBase(["A", "B", "C", "D", "E", "F", "G#"]),
+            major5: [ 0, 2, 4, 7, 9 ],
+            minor5: [ 0, 3, 5, 7, 10 ], // scaleFromBase(["C", "E♭", "F", "G", "B♭"])
+            minorBlues: scaleFromBase(["C", "E♭", "F", "A♭", "B♭"]),
+            majorBlues: scaleFromBase(["C", "D", "F", "G", "A"])
+        }
+        const colorWheel = [
+            0x1f77b4, 0xff7f0e, 0x2ca02c, 0xd62728, 0x9467bd,
+            0x8c564b, 0xe377c2, 0x7f7f7f, 0xbcbd22, 0x17becf ];
+        const stringLength = 22;
+        const fretMarks = { 3: 1, 5: 1, 7: 1, 9: 1, 0: 2 }
+        const allToneEls = [];
+        const keyedToneEls = {};
+        const placementNames = ["1st", "2nd", "3rd"];
+        const enabledNths = [1, 3, 5];
+        const nthsEl = document.querySelector(".nths");
+
+        let selectedScale = scales.major;
+        let selectedMode = 0;
+        let selectedTone = undefined;
+
+        function scaleFromBase(scaleTones)
+        {
+            const scale = [];
+            const base = flatTones[scaleTones[0]] || scaleTones[0];
+            const cIndex = tones.indexOf(base);
+            for (let i = 0; i < scaleTones.length; ++i)
+            {
+                const scaleTone = scaleTones[i];
+                const tone = flatTones[scaleTone] || scaleTone;
+                const toneIndex = tones.indexOf(tone) - cIndex;
+                scale.push(toneIndex >= 0
+                    ? toneIndex
+                    : tones.length + toneIndex);
+            }
+
+            return scale;
+        }
+
+        function getShiftedElements(scale, tone, func)
+        {
+            const toneIndex = tones.indexOf(tone);
+            const shiftedTone = tones[(scale[func - 1] + toneIndex) % 12];
+            return keyedToneEls[shiftedTone];
+        }
+
+        function getPlacementName(n)
+        {
+            return  placementNames[n - 1] || (n + "th");
+        }
+
+        function colorNotes(scale, tone, func, color)
+        {
+            const els = getShiftedElements(scale, tone, func);
+
+            for (var i = 0; i < els.length; ++i)
+            {
+                els[i].setAttribute("style", `background-color: ${getRgb(color)};`);
+            }
+        }
+
+        // Set the title="" attribute
+        function titleNotes(scale, tone, func, title)
+        {
+            const els = getShiftedElements(scale, tone, func);
+
+            for (var i = 0; i < els.length; ++i)
+            {
+                els[i].setAttribute("title", title || "");
+            }
+        }
+
+        function rehighlightCords()
+        {
+            if (selectedTone !== undefined)
+            {
+                highlightCords(selectedTone);
+            }
+        }
+
+        function highlightCords(tone)
+        {
+            selectedTone = tone;
+
+            for (let i = 0; i < allToneEls.length; ++i)
+            {
+                const toneEl = allToneEls[i];
+                toneEl.removeAttribute("style");
+                toneEl.removeAttribute("title");
+            }
+
+            for (let i = 0; i < enabledNths.length; ++i)
+            {
+                const nth = enabledNths[i];
+                colorNotes(selectedScale, tone, nth, colorWheel[nth - 1]);
+            }
+
+            for (let i = 0; i < selectedScale.length; ++i)
+            {
+                titleNotes(selectedScale, tone, i + 1, getPlacementName(i));
+            }
+        }
+
+        function createBoard()
+        {
+            const boardEl = document.createElement("div");
+            boardEl.className = "board";
+
+            for (let stringIndex = 0; stringIndex < strings.length; ++stringIndex)
+            {
+                const stringRoot = strings[stringIndex];
+                const toneIndex = tones.indexOf(stringRoot);
+
+                const stringEl = document.createElement("div");
+                boardEl.appendChild(stringEl);
+                stringEl.className = "string";
+
+                for (let i = 0; i < stringLength; ++i)
+                {
+                    const tone = tones[(toneIndex + i) % tones.length];
+
+                    var toneEl = document.createElement("a");
+                    stringEl.appendChild(toneEl);
+                    toneEl.className = "tone " + (i == 0 ? "first" : "");
+                    toneEl.href = "javascript:void(0)";
+                    toneEl.appendChild(document.createTextNode(tone));
+                    toneEl.setAttribute("data-tone", tone);
+                    toneEl.addEventListener("click", e => {
+                        const tone = e.target.attributes["data-tone"].value;
+                        highlightCords(tone);
+                    });
+
+                    const keyedTone = keyedToneEls[tone] = keyedToneEls[tone] || [];
+                    keyedTone.push(toneEl);
+                    allToneEls.push(toneEl);
+                }
+            }
+
+            const marksEl = document.createElement("div");
+            boardEl.appendChild(marksEl);
+            marksEl.className = "marks";
+
+            for (let i = 0; i < stringLength; ++i)
+            {
+                const markCount =  i == 0 ? 0 : (fretMarks[i % 12] || 0);
+                const markEl = document.createElement("span");
+                marksEl.appendChild(markEl);
+                markEl.className = "mark mark-" + markCount;
+                markEl.innerHTML = new Array(markCount + 1).join("&bull;") || "&nbsp;";
+            }
+
+            return boardEl;
+        }
+
+        function getRgb(hex)
+        {
+            const b = (hex >> 0) & 0xFF;
+            const g = (hex >> 8) & 0xFF;
+            const r = (hex >> 16) & 0xFF;
+
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+
+        function createOptions(scaleLength)
+        {
+            const container = document.createElement("div");
+            for (let i = 0; i < scaleLength; ++i)
+            {
+                const itemContainer = document.createElement("div");
+                itemContainer.className = "show";
+                itemContainer.innerHTML = `<label><input type="checkbox" data-th="${i+1}" />
+                    <div class="show-color" style="background-color: ${getRgb(colorWheel[i])};"></div>
+                    Show ${getPlacementName(i+1)}
+                    </label>`;
+
+                const checkbox = itemContainer.querySelector("input", itemContainer);
+
+                if (enabledNths.indexOf(i + 1) != -1)
+                {
+                    checkbox.checked = true;
+                }
+
+                checkbox.addEventListener("change", e => {
+                    const th = parseInt(e.target.attributes["data-th"].value, 10);
+
+                    if (e.target.checked)
+                    {
+                        enabledNths.push(th);
+                        rehighlightCords();
+                        return;
+                    }
+
+                    const index = enabledNths.indexOf(th);
+
+                    if (index == -1)
+                    {
+                        return;
+                    }
+
+                    enabledNths.splice(index, 1);
+                    rehighlightCords();
+                });
+
+                container.appendChild(itemContainer);
+            }
+
+            return container;
+        }
+
+        function appendOptions()
+        {
+            var length = selectedScale.length;
+            nthsEl.innerHTML = "";
+            nthsEl.appendChild(createOptions(length));
+
+            const toRemove = [];
+            for (let i = enabledNths.length - 1; i >= 0; --i)
+            {
+                if (enabledNths[i] > length)
+                {
+                    toRemove.push(i);
+                }
+            }
+
+            for (let i = 0; i < toRemove.length; ++i)
+            {
+                enabledNths.splice(toRemove[i], 1);
+            }
+        }
+
+        function runTests()
+        {
+            const correctScale = [ 0, 3, 5, 7, 10 ];
+            const actualScale = scaleFromBase(["C", "E♭", "F", "G", "B♭"]);
+
+            for (let i = 0; i < correctScale.length; ++i)
+            {
+                if (correctScale[i] != actualScale[i])
+                {
+                    throw Error("Unexpected at index " + i);
+                }
+            }
+        }
+
+        runTests();
+
+        document.body.appendChild(createBoard())
+        appendOptions();
+        document.querySelector(".scaleSelection").addEventListener("change", e =>
+        {
+            const newScaleName = e.target.value;
+            selectedScale = scales[newScaleName];
+            appendOptions();
+            rehighlightCords();
+        });
+        document.querySelector(".scaleMode").addEventListener("change", e =>
+        {
+            selectedMode = parseInt(e.target.value, 10);
+            appendOptions();
+            rehighlightCords();
+        });
+    </script>
+</body>
+</html>
